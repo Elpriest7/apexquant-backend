@@ -8,6 +8,7 @@ const cron       = require("node-cron");
 const marketData   = require("./marketData");
 const signalEngine = require("./signalEngine");
 const journalStore = require("./journalStore");
+const aiService    = require("./aiService");
 
 const app    = express();
 const server = http.createServer(app);
@@ -80,6 +81,33 @@ app.patch("/api/trades/:id", (req, res) => {
   res.json(updated);
 });
 
+// AI write-up for a trade
+app.post("/api/trades/:id/writeup", async (req, res) => {
+  const trade = journalStore.getById(req.params.id);
+  if (!trade) return res.status(404).json({ error: "Trade not found" });
+  const writeUp = await aiService.getWriteUp(trade);
+  journalStore.updateWriteUp(req.params.id, writeUp);
+  broadcast({ type: "TRADE_UPDATED", trade: journalStore.getById(req.params.id) });
+  res.json({ writeUp });
+});
+
+// AI journal narrative for a trade
+app.post("/api/trades/:id/journal", async (req, res) => {
+  const trade = journalStore.getById(req.params.id);
+  if (!trade) return res.status(404).json({ error: "Trade not found" });
+  const journalNarrative = await aiService.getJournalNarrative(trade);
+  journalStore.updateJournal(req.params.id, journalNarrative);
+  broadcast({ type: "TRADE_UPDATED", trade: journalStore.getById(req.params.id) });
+  res.json({ journalNarrative });
+});
+
+// Self improvement report
+app.get("/api/improve", async (req, res) => {
+  const stats  = journalStore.getStats();
+  const report = await aiService.getSelfImprovement(stats);
+  res.json({ report });
+});
+
 // ── Scanner ────────────────────────────────────
 async function runScan() {
   console.log("Running market scan...");
@@ -91,8 +119,17 @@ async function runScan() {
 
     for (const signal of signals) {
       journalStore.add(signal);
+
+      // Auto-generate AI write-up in background
+      aiService.getWriteUp(signal).then((writeUp) => {
+        if (writeUp) {
+          journalStore.updateWriteUp(signal.id, writeUp);
+          broadcast({ type: "TRADE_UPDATED", trade: journalStore.getById(signal.id) });
+        }
+      });
+
       broadcast({ type: "NEW_SIGNAL", trade: signal });
-      console.log(`Signal: ${signal.asset} ${signal.dir} | RR 1:${signal.rr}`);
+      console.log(`Signal: ${signal.asset} ${signal.dir} | RR 1:${signal.rr} | Conf ${signal.conf}/10`);
     }
 
     broadcast({
