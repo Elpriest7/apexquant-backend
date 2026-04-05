@@ -5,19 +5,20 @@
 const axios = require("axios");
 
 const SYMBOLS = {
-  XAUUSD: "GC=F",
-  EURUSD: "EURUSD=X",
-  GBPUSD: "GBPUSD=X",
-  USDJPY: "JPY=X",
-  BTCUSD: "BTC-USD",
-  ETHUSD: "ETH-USD",
-  NVDA:   "NVDA",
-  USOIL:  "CL=F",
+  XAUUSD: "GC=F",       // Gold Futures
+  EURUSD: "EURUSD=X",   // Euro/USD
+  GBPUSD: "GBPUSD=X",   // GBP/USD
+  USDJPY: "USDJPY=X",   // USD/JPY
+  BTCUSD: "BTC-USD",    // Bitcoin
+  ETHUSD: "ETH-USD",    // Ethereum
+  NVDA:   "NVDA",       // NVIDIA
+  USOIL:  "CL=F",       // WTI Crude Oil Futures
 };
 
 const HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-  "Accept": "application/json",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "application/json,text/html",
+  "Accept-Language": "en-US,en;q=0.9",
 };
 
 // Fetch real OHLC candles from Yahoo Finance
@@ -26,8 +27,11 @@ async function getCandles(apexSymbol, interval="1d", range="3mo") {
   if (!yahooSymbol) return null;
 
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${interval}&range=${range}`;
-    const { data } = await axios.get(url, { headers: HEADERS, timeout: 10000 });
+    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${interval}&range=${range}&includePrePost=false`;
+    const { data } = await axios.get(url, {
+      headers: HEADERS,
+      timeout: 12000,
+    });
 
     const result = data?.chart?.result?.[0];
     if (!result) return null;
@@ -46,17 +50,18 @@ async function getCandles(apexSymbol, interval="1d", range="3mo") {
       high:   highs[i],
       low:    lows[i],
       close:  closes[i],
-      volume: volumes[i],
-    })).filter(c => c.open && c.high && c.low && c.close);
+      volume: volumes[i] || 0,
+    })).filter(c => c.open != null && c.high != null && c.low != null && c.close != null
+                 && !isNaN(c.open) && !isNaN(c.close));
 
     return candles;
   } catch (err) {
-    console.warn(`Yahoo Finance error for ${apexSymbol}: ${err.message}`);
+    console.warn(`Yahoo Finance error for ${apexSymbol} (${SYMBOLS[apexSymbol]}): ${err.message}`);
     return null;
   }
 }
 
-// Get current price
+// Get current live price
 async function getPrice(apexSymbol) {
   const candles = await getCandles(apexSymbol, "1d", "5d");
   if (!candles || candles.length === 0) return null;
@@ -67,19 +72,30 @@ async function getPrice(apexSymbol) {
 async function getAllPrices() {
   const prices = {};
   const tasks  = Object.keys(SYMBOLS).map(async (sym) => {
-    const price = await getPrice(sym);
-    if (price) prices[sym] = +price.toFixed(sym === "USDJPY" ? 2 : sym === "BTCUSD" || sym === "ETHUSD" || sym === "NVDA" ? 2 : 4);
+    try {
+      const price = await getPrice(sym);
+      if (price && !isNaN(price)) {
+        prices[sym] = +price.toFixed(
+          sym === "BTCUSD" || sym === "NVDA" ? 2 :
+          sym === "ETHUSD" ? 2 :
+          sym === "XAUUSD" || sym === "USOIL" ? 2 :
+          sym === "USDJPY" ? 3 : 4
+        );
+      }
+    } catch (err) {
+      console.warn(`Price fetch failed for ${sym}: ${err.message}`);
+    }
   });
   await Promise.allSettled(tasks);
   return prices;
 }
 
-// Get daily candles (HTF analysis)
+// Get daily candles for technical analysis
 async function getDailyCandles(apexSymbol) {
   return await getCandles(apexSymbol, "1d", "6mo");
 }
 
-// Get weekly candles (monthly bias)
+// Get weekly candles for HTF bias
 async function getWeeklyCandles(apexSymbol) {
   return await getCandles(apexSymbol, "1wk", "2y");
 }
