@@ -5,7 +5,7 @@
 const axios = require("axios");
 
 const SYMBOLS = {
-  XAUUSD: "GC=F",       // Gold Futures
+  XAUUSD: "XAUUSD=X",   // Gold Spot vs USD
   EURUSD: "EURUSD=X",   // Euro/USD
   GBPUSD: "GBPUSD=X",   // GBP/USD
   USDJPY: "USDJPY=X",   // USD/JPY
@@ -51,12 +51,15 @@ async function getCandles(apexSymbol, interval="1d", range="3mo") {
       low:    lows[i],
       close:  closes[i],
       volume: volumes[i] || 0,
-    })).filter(c => c.open != null && c.high != null && c.low != null && c.close != null
-                 && !isNaN(c.open) && !isNaN(c.close));
+    })).filter(c =>
+      c.open != null && c.high != null &&
+      c.low  != null && c.close != null &&
+      !isNaN(c.open) && !isNaN(c.close)
+    );
 
     return candles;
   } catch (err) {
-    console.warn(`Yahoo Finance error for ${apexSymbol} (${SYMBOLS[apexSymbol]}): ${err.message}`);
+    console.warn(`Yahoo Finance error for ${apexSymbol}: ${err.message}`);
     return null;
   }
 }
@@ -75,12 +78,10 @@ async function getAllPrices() {
     try {
       const price = await getPrice(sym);
       if (price && !isNaN(price)) {
-        prices[sym] = +price.toFixed(
-          sym === "BTCUSD" || sym === "NVDA" ? 2 :
-          sym === "ETHUSD" ? 2 :
-          sym === "XAUUSD" || sym === "USOIL" ? 2 :
-          sym === "USDJPY" ? 3 : 4
-        );
+        let decimals = 4;
+        if (sym === "BTCUSD" || sym === "NVDA" || sym === "XAUUSD" || sym === "USOIL" || sym === "ETHUSD") decimals = 2;
+        if (sym === "USDJPY") decimals = 3;
+        prices[sym] = +price.toFixed(decimals);
       }
     } catch (err) {
       console.warn(`Price fetch failed for ${sym}: ${err.message}`);
