@@ -396,7 +396,7 @@ function detect4HCandle(candles4h, direction){
 // ═══════════════════════════════════════════════
 //  MAIN SCAN
 // ═══════════════════════════════════════════════
-async function scan(prices){
+async function scan(prices, log=console.log){
   const signals  = [];
   let   found    = 0;
   const MAX      = 2;
