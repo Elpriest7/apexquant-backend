@@ -42,7 +42,8 @@ app.get("/", (req, res) => {
   res.json({
     status:   "APEX QUANT LIVE",
     mode:     "Swing Trading",
-    schedule: "Daily scan at 22:00 GMT (Daily candle close) + Weekly scan Friday",
+    schedule: "Daily scan at 22:00 GMT + Weekly scan Friday 21:55 GMT",
+    markets:  "31 assets — Forex, Crypto, Stocks, Commodities",
     clients:  clients.size,
     trades:   journalStore.getAll().length,
     uptime:   process.uptime().toFixed(0) + "s",
@@ -57,13 +58,20 @@ app.get("/api/prices", async (req, res) => {
   catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET scan — returns full detailed log
 let lastScanLog = [];
+let lastScanTime = null;
 app.get("/api/scan", (req, res) => {
-  res.json({ log: lastScanLog, trades: journalStore.getAll().length });
+  res.json({
+    log:       lastScanLog,
+    trades:    journalStore.getAll().length,
+    lastScan:  lastScanTime,
+  });
 });
 
+// POST scan — trigger manual scan
 app.post("/api/scan", async (req, res) => {
-  res.json({ message: "Swing scan started" });
+  res.json({ message: "Swing scan started — check /api/scan for detailed log" });
   await runScan("Manual");
 });
 
@@ -95,16 +103,12 @@ app.post("/api/manual-trade", async (req, res) => {
 
     const trade = {
       id:          `MANUAL-${asset}-${Date.now()}`,
-      asset,
-      dir,
+      asset, dir,
       setup:       setup||"Manual Setup",
       model:       fib&&fib!=="N/A"?`Fib ${fib} + Manual Analysis`:"Manual Structure Analysis",
       fib:         fib||"N/A",
       conf:        9,
-      entry:       +entry,
-      sl:          +sl,
-      tp:          +tp,
-      rr,
+      entry:       +entry, sl:+sl, tp:+tp, rr,
       biasM:       biasM||"Bullish",
       biasW:       biasW||"Bullish",
       biasD:       biasD||"Bullish",
@@ -112,12 +116,12 @@ app.post("/api/manual-trade", async (req, res) => {
       confluence:  [
         "Manually submitted — trader identified setup on chart",
         setup||"Structure pattern confirmed on daily chart",
-        fib&&fib!=="N/A"?`Fibonacci ${fib} confluence`:"Key monthly level",
+        fib&&fib!=="N/A"?`Fibonacci ${fib} confluence`:"Key monthly level identified",
         `RR 1:${rr} — meets minimum 1:2 requirement`,
         "AI validated and journaled automatically",
       ],
       execNote:    notes||"Manual trade — trader identified setup independently",
-      psyNote:     "Disciplined manual analysis — waited for full HTF confluence",
+      psyNote:     "Disciplined manual analysis — waited for full HTF confluence before submitting",
       isManual:    true,
       outcome:     "PENDING",
       pnl:         null,
@@ -128,7 +132,6 @@ app.post("/api/manual-trade", async (req, res) => {
 
     journalStore.add(trade);
 
-    // Generate AI write-up + fundamentals in background
     Promise.all([
       aiService.getWriteUp(trade),
       aiService.getFundamental(asset, dir),
@@ -183,22 +186,29 @@ app.get("/api/improve", async (req, res) => {
   res.json({ report });
 });
 
-// ── Scanner ────────────────────────────────────
+// ── Scanner with detailed logging ─────────────
 async function runScan(trigger="Auto"){
-  lastScanLog=[];
-  const log=(msg)=>{ lastScanLog.push(msg); console.log(msg); };
+  lastScanLog  = [];
+  lastScanTime = new Date().toISOString();
 
-  log(`🔍 Swing scan triggered: ${trigger} at ${new Date().toUTCString()}`);
+  const log = (msg) => {
+    lastScanLog.push(msg);
+    console.log(msg);
+  };
+
+  log(`🔍 Swing scan: ${trigger} — ${new Date().toUTCString()}`);
   broadcast({ type:"SCAN_START", ts:new Date().toISOString(), trigger });
 
   try{
-    const prices  = await marketData.getAllPrices();
-    const signals = await signalEngine.scan(prices);
+    const prices = await marketData.getAllPrices();
+    log(`📡 Prices loaded: ${Object.keys(prices).length} markets`);
+
+    // Pass logger to signal engine
+    const signals = await signalEngine.scan(prices, log);
 
     for(const signal of signals){
       journalStore.add(signal);
 
-      // Auto AI write-up in background
       aiService.getWriteUp(signal).then(writeUp=>{
         if(writeUp){
           journalStore.updateWriteUp(signal.id, writeUp);
@@ -207,31 +217,32 @@ async function runScan(trigger="Auto"){
       });
 
       broadcast({ type:"NEW_SIGNAL", trade:signal });
-      log(`✅ ${signal.asset} ${signal.dir} | ${signal.setup} | Fib ${signal.fib} | ${signal.model} | RR 1:${signal.rr}`);
+      log(`✅ SIGNAL: ${signal.asset} ${signal.dir} | ${signal.setup} | Fib ${signal.fib} | RR 1:${signal.rr}`);
     }
 
     broadcast({
       type:    "SCAN_COMPLETE",
       ts:      new Date().toISOString(),
       found:   signals.length,
-      scanned: 8, // per batch
+      scanned: Object.keys(prices).length,
     });
 
-    log(`✅ Scan done. ${signals.length} swing signal(s) found.`);
+    log(`✅ Scan complete. ${signals.length} signal(s) found.`);
+
   }catch(err){
-    log(`❌ Error: ${err.message}`);
+    log(`❌ Scan error: ${err.message}`);
     broadcast({ type:"SCAN_ERROR", error:err.message });
   }
 }
 
 // ── Swing Trading Schedule ─────────────────────
-// Daily scan at 22:00 GMT — after daily candle closes
+// Daily scan at 22:00 GMT — daily candle close
 cron.schedule("0 22 * * *", ()=>runScan("Daily Close"), { timezone:"UTC" });
 
-// Weekly scan Friday at 21:55 GMT — before weekly candle closes
+// Weekly scan Friday 21:55 GMT — weekly candle close
 cron.schedule("55 21 * * 5", ()=>runScan("Weekly Close"), { timezone:"UTC" });
 
-// Price broadcast every 5 minutes (swing traders don't need tick-by-tick)
+// Price update every 5 minutes
 cron.schedule("*/5 * * * *", async()=>{
   try{
     const prices = await marketData.getAllPrices();
@@ -242,10 +253,9 @@ cron.schedule("*/5 * * * *", async()=>{
 // ── Start ──────────────────────────────────────
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, ()=>{
-  console.log(`\nAPEX QUANT — Swing Trading Backend`);
-  console.log(`Port: ${PORT}`);
-  console.log(`Schedule: Daily scan 22:00 GMT | Weekly scan Friday 21:55 GMT`);
-  console.log(`Markets: 31 assets across Forex, Crypto, Stocks, Commodities\n`);
-  // Run first scan 10 seconds after startup
-  setTimeout(()=>runScan("Startup"), 10000);
+  console.log(`\n🚀 APEX QUANT — Swing Trading Backend`);
+  console.log(`   Port: ${PORT}`);
+  console.log(`   Daily scan: 22:00 GMT | Weekly: Friday 21:55 GMT`);
+  console.log(`   Markets: 31 assets\n`);
+  setTimeout(()=>runScan("Startup"), 8000);
 });
