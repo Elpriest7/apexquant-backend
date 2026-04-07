@@ -7,7 +7,7 @@ const cron       = require("node-cron");
 
 const marketData   = require("./marketData");
 const signalEngine = require("./signalEngine");
-const journalStore = require("./journalStore");
+const journalStore = require("./database");
 const aiService    = require("./aiService");
 
 const app    = express();
