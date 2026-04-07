@@ -402,7 +402,7 @@ async function scan(prices, log=console.log){
   const MAX      = 2;
 
   const batch = getNextBatch();
-  console.log(`\n  📊 Scanning: ${Object.keys(batch).join(", ")}`);
+  log(`\n  📊 Scanning: ${Object.keys(batch).join(", ")}`);
 
   for(const [symbol] of Object.entries(batch)){
     if(found>=MAX) break;
@@ -410,7 +410,7 @@ async function scan(prices, log=console.log){
     const currentPrice = prices[symbol] || await getPrice(symbol);
     if(!currentPrice||currentPrice<=0) continue;
 
-    console.log(`\n  ═══ ${symbol} @ ${currentPrice} ═══`);
+    log(`\n  ═══ ${symbol} @ ${currentPrice} ═══`);
 
     try{
       const [monthly, weekly, daily, h4] = await Promise.all([
@@ -421,7 +421,7 @@ async function scan(prices, log=console.log){
       ]);
 
       if(!daily||daily.length<20){
-        console.log(`  ${symbol} → Insufficient data. Skip.`);
+        log(`  ${symbol} → Insufficient data. Skip.`);
         continue;
       }
 
@@ -432,63 +432,63 @@ async function scan(prices, log=console.log){
       const monthlyLevel = priceAtMonthlyLevel(currentPrice, supports, resistances);
 
       if(!monthlyLevel){
-        console.log(`  ${symbol} → Not at monthly S/R. Skip.`);
+        log(`  ${symbol} → Not at monthly S/R. Skip.`);
         continue;
       }
-      console.log(`  ${symbol} → Monthly ${monthlyLevel.type} @ ${monthlyLevel.level?.toFixed(4)} ✓`);
+      log(`  ${symbol} → Monthly ${monthlyLevel.type} @ ${monthlyLevel.level?.toFixed(4)} ✓`);
 
       const direction = monthlyLevel.direction;
 
       // Monthly trend must not strongly oppose direction
       if(monthlyTrend!=="Neutral"&&monthlyTrend===(direction==="LONG"?"Bearish":"Bullish")){
-        console.log(`  ${symbol} → Strong monthly trend opposes direction. Skip.`);
+        log(`  ${symbol} → Strong monthly trend opposes direction. Skip.`);
         continue;
       }
 
       // ─── STEP 2: Daily Trend ───────────────────
       const dailyTrend = getDailyTrend(daily);
-      console.log(`  ${symbol} → Daily trend: ${dailyTrend}`);
+      log(`  ${symbol} → Daily trend: ${dailyTrend}`);
 
       if(direction==="LONG"&&dailyTrend==="Bearish"){
-        console.log(`  ${symbol} → Daily still bearish at support. Not ready. Skip.`);
+        log(`  ${symbol} → Daily still bearish at support. Not ready. Skip.`);
         continue;
       }
       if(direction==="SHORT"&&dailyTrend==="Bullish"){
-        console.log(`  ${symbol} → Daily still bullish at resistance. Not ready. Skip.`);
+        log(`  ${symbol} → Daily still bullish at resistance. Not ready. Skip.`);
         continue;
       }
 
       // ─── STEP 2B: Daily Minor Structure Shift ──
       const structureShift = detectMinorStructureShift(daily, direction);
       if(!structureShift){
-        console.log(`  ${symbol} → No daily minor structure shift yet. Skip.`);
+        log(`  ${symbol} → No daily minor structure shift yet. Skip.`);
         continue;
       }
-      console.log(`  ${symbol} → Structure shift: ${structureShift.type} ✓`);
+      log(`  ${symbol} → Structure shift: ${structureShift.type} ✓`);
 
       // ─── STEP 3: Daily Pattern ─────────────────
       const pattern = detectDailyPattern(daily, direction);
       if(!pattern){
-        console.log(`  ${symbol} → No daily reversal pattern. Skip.`);
+        log(`  ${symbol} → No daily reversal pattern. Skip.`);
         continue;
       }
-      console.log(`  ${symbol} → Pattern: ${pattern.pattern} ✓`);
+      log(`  ${symbol} → Pattern: ${pattern.pattern} ✓`);
 
       // ─── STEP 4: Fibonacci Confluence ──────────
       const fibResult = getFibConfluence(daily, currentPrice, direction, pattern);
       if(!fibResult){
-        console.log(`  ${symbol} → No Fibonacci confluence. Skip.`);
+        log(`  ${symbol} → No Fibonacci confluence. Skip.`);
         continue;
       }
-      console.log(`  ${symbol} → Fib ${fibResult.fib} confluence ✓`);
+      log(`  ${symbol} → Fib ${fibResult.fib} confluence ✓`);
 
       // ─── STEP 5: 4H Candle Trigger ─────────────
       const candleTrigger = detect4HCandle(h4, direction);
       if(!candleTrigger){
-        console.log(`  ${symbol} → No 4H candle trigger. Skip.`);
+        log(`  ${symbol} → No 4H candle trigger. Skip.`);
         continue;
       }
-      console.log(`  ${symbol} → 4H trigger: ${candleTrigger} ✓`);
+      log(`  ${symbol} → 4H trigger: ${candleTrigger} ✓`);
 
       // ─── ALL 5 STEPS CONFIRMED — SIGNAL ────────
       const recentD    = daily.slice(-20);
@@ -538,19 +538,19 @@ async function scan(prices, log=console.log){
 
       signals.push(signal);
       found++;
-      console.log(`\n  ✅ SWING SIGNAL CONFIRMED:`);
-      console.log(`     ${symbol} ${direction} | ${pattern.pattern}`);
-      console.log(`     Structure: ${structureShift.type}`);
-      console.log(`     Fib: ${fibResult.fib} | Trigger: ${candleTrigger}`);
-      console.log(`     Entry: ${currentPrice} | SL: ${sl} | TP: ${tp} | RR 1:${rr}`);
+      log(`\n  ✅ SWING SIGNAL CONFIRMED:`);
+      log(`     ${symbol} ${direction} | ${pattern.pattern}`);
+      log(`     Structure: ${structureShift.type}`);
+      log(`     Fib: ${fibResult.fib} | Trigger: ${candleTrigger}`);
+      log(`     Entry: ${currentPrice} | SL: ${sl} | TP: ${tp} | RR 1:${rr}`);
 
     }catch(err){
-      console.error(`  ${symbol} → Error: ${err.message}`);
+      log(`  ${symbol} → Error: ${err.message}`);
     }
   }
 
   if(signals.length===0){
-    console.log("\n  No swing setups confirmed. All 5 criteria not yet met. Quality over quantity.");
+    log("\n  No swing setups confirmed. All 5 criteria not yet met. Quality over quantity.");
   }
 
   return signals;
