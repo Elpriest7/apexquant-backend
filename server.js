@@ -53,6 +53,19 @@ app.get("/", (req, res) => {
 app.get("/api/trades",  (req, res) => res.json(journalStore.getAll()));
 app.get("/api/stats",   (req, res) => res.json(journalStore.getStats()));
 
+// DB connection test
+app.get("/api/dbtest", async (req, res) => {
+  try {
+    const { createClient } = require("@supabase/supabase-js");
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+    const { data, error } = await sb.from("trades").select("count").limit(1);
+    if(error) return res.json({ connected: false, error: error.message });
+    res.json({ connected: true, supabaseUrl: process.env.SUPABASE_URL?.slice(0,30)+"...", data });
+  } catch(err) {
+    res.json({ connected: false, error: err.message });
+  }
+});
+
 app.get("/api/prices", async (req, res) => {
   try { res.json(await marketData.getAllPrices()); }
   catch(err) { res.status(500).json({ error: err.message }); }
