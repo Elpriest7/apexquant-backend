@@ -53,6 +53,28 @@ app.get("/", (req, res) => {
 app.get("/api/trades",  (req, res) => res.json(journalStore.getAll()));
 app.get("/api/stats",   (req, res) => res.json(journalStore.getStats()));
 
+// Add a test trade to verify DB saving works
+app.post("/api/test-trade", async (req, res) => {
+  try {
+    const testTrade = {
+      id: `TEST-${Date.now()}`,
+      asset: "XAUUSD", dir: "LONG", setup: "Test Setup",
+      model: "Test Model", fib: "0.786", conf: 9,
+      entry: 4700, sl: 4650, tp: 4800, rr: 2.0,
+      biasM: "Bullish", biasW: "Bullish", biasD: "Bullish",
+      fundamental: "Test fundamental", confluence: ["Test confluence"],
+      execNote: "Test execution", psyNote: "Test psychology",
+      isManual: false, outcome: "PENDING", pnl: null,
+      aiWriteUp: "", journalNarrative: "", structureShift: null,
+    };
+    await journalStore.add(testTrade);
+    const all = await journalStore.getAll();
+    res.json({ success: true, saved: testTrade.id, totalTrades: all.length });
+  } catch(err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // DB connection test
 app.get("/api/dbtest", async (req, res) => {
   try {
