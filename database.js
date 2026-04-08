@@ -83,13 +83,18 @@ async function add(trade) {
 
 // ── Get all trades ─────────────────────────────
 async function getAll() {
-  const { data, error } = await supabase
-    .from("trades")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(200);
-  if (error) { console.error("DB getAll error:", error.message); return []; }
-  return (data || []).map(fromRow);
+  try {
+    const { data, error } = await supabase
+      .from("trades")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) { console.error("DB getAll error:", error.message); return []; }
+    return Array.isArray(data) ? data.map(fromRow) : [];
+  } catch(err) {
+    console.error("DB getAll exception:", err.message);
+    return [];
+  }
 }
 
 // ── Get trade by ID ────────────────────────────
@@ -157,7 +162,7 @@ async function updateFundamental(id, fundamental) {
 
 // ── Get stats ──────────────────────────────────
 async function getStats() {
-  const trades  = await getAll();
+  const trades  = await getAll() || [];
   const closed  = trades.filter(t => t.outcome !== "PENDING");
   const wins    = closed.filter(t => t.outcome === "WIN");
   const losses  = closed.filter(t => t.outcome === "LOSS");
