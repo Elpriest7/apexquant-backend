@@ -53,6 +53,28 @@ app.get("/", (req, res) => {
 app.get("/api/trades",  (req, res) => res.json(journalStore.getAll()));
 app.get("/api/stats",   (req, res) => res.json(journalStore.getStats()));
 
+// Debug endpoint — shows raw DB response
+app.get("/api/debug", async (req, res) => {
+  try {
+    const { createClient } = require("@supabase/supabase-js");
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+    const { data, error, status, statusText } = await sb.from("trades").select("id, asset, dir").limit(5);
+    const result = {
+      error:      error ? error.message : null,
+      status,
+      statusText,
+      dataType:   typeof data,
+      isArray:    Array.isArray(data),
+      length:     data ? data.length : 0,
+      raw:        data,
+    };
+    res.setHeader("Content-Type","application/json");
+    res.end(JSON.stringify(result));
+  } catch(err) {
+    res.end(JSON.stringify({ exception: err.message }));
+  }
+});
+
 // Add a test trade to verify DB saving works
 app.post("/api/test-trade", async (req, res) => {
   try {
