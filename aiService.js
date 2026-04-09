@@ -66,15 +66,30 @@ Be very specific — mention actual data, rates, events. No vague statements. Ma
 
 // ── Full AI write-up with live news ───────────
 async function getWriteUp(trade){
+  const asset    = trade.asset    || "Unknown";
+  const dir      = trade.dir      || "LONG";
+  const setup    = trade.setup    || "Structure Setup";
+  const fib      = trade.fib      || "0.786";
+  const model    = trade.model    || "Technical Analysis";
+  const biasM    = trade.biasM    || "Bullish";
+  const biasW    = trade.biasW    || "Bullish";
+  const biasD    = trade.biasD    || "Bullish";
+  const entry    = trade.entry    || 0;
+  const sl       = trade.sl       || 0;
+  const tp       = trade.tp       || 0;
+  const rr       = trade.rr       || 0;
+  const fund     = trade.fundamental || "Market structure and macro conditions align with this direction";
+  const shift    = trade.structureShift || "";
+
   const prompt = `You are an elite institutional swing trading mentor.
 
-TRADE: ${trade.asset} ${trade.dir}
-Setup: ${trade.setup} | Fib: ${trade.fib} | Entry model: ${trade.model}
-Monthly bias: ${trade.biasM} | Weekly: ${trade.biasW} | Daily: ${trade.biasD}
-${trade.structureShift ? `Daily structure: ${trade.structureShift}` : ""}
-Entry: ${trade.entry} | SL: ${trade.sl} | TP: ${trade.tp} | RR: 1:${trade.rr}
+TRADE: ${asset} ${dir}
+Setup: ${setup} | Fib: ${fib} | Entry model: ${model}
+Monthly bias: ${biasM} | Weekly: ${biasW} | Daily: ${biasD}
+${shift ? `Daily structure: ${shift}` : ""}
+Entry: ${entry} | SL: ${sl} | TP: ${tp} | RR: 1:${rr}
 ${trade.isManual ? "NOTE: Manually submitted by trader after their own chart analysis." : ""}
-Current fundamental: "${trade.fundamental||"Market conditions align with direction"}"
+Current fundamental: "${fund}"
 
 Write EXACTLY 3 short paragraphs. Plain prose. No bullets. No headers.
 
@@ -87,7 +102,7 @@ PARAGRAPH 3 — CONFIDENCE: As a mentor, why is this the right swing trade to ta
 Max 180 words. Calm, assured, mentor tone.`;
 
   const txt = await callGemini(prompt, 350, true); // Use web search for real news
-  return txt || `This ${trade.asset} ${trade.dir} swing setup has reached a critical institutional level where all five criteria of professional trading have aligned simultaneously. ${trade.fundamental}. The ${trade.fib} Fibonacci retracement combined with the ${trade.setup} pattern creates the exact confluence that smart money has historically used to position before major moves. Your patience in waiting for this specific alignment — monthly level, daily structure shift, pattern, Fibonacci, and 4H candle trigger — is precisely what separates disciplined swing traders from retail noise. One setup like this, taken correctly, is worth more than twenty random trades.`;
+  return txt || `This ${asset} ${dir} swing setup has reached a critical institutional level where all five criteria of professional trading have aligned simultaneously. ${fund}. The ${fib} Fibonacci retracement combined with the ${setup} pattern creates the exact confluence that smart money has historically used to position before major moves. Your patience in waiting for this specific alignment — monthly level, daily structure shift, pattern, Fibonacci, and 4H candle trigger — is precisely what separates disciplined swing traders from retail noise. One setup like this, taken correctly, is worth more than twenty random trades.`;
 }
 
 // ── Journal narrative ──────────────────────────
