@@ -196,12 +196,26 @@ app.post("/api/manual-trade", async(req,res)=>{
       ts:new Date().toISOString(), aiWriteUp:"", journalNarrative:"",
     };
     await dbAdd(trade);
-    Promise.all([aiService.getWriteUp(trade), aiService.getFundamental(asset,dir)]).then(async([wu,fund])=>{
-      if(wu)   await dbUpdate(trade.id,{ai_write_up:wu});
-      if(fund) await dbUpdate(trade.id,{fundamental:fund});
-      const updated = await dbGetById(trade.id);
-      if(updated) broadcast({type:"TRADE_UPDATED",trade:updated});
-    });
+    // Fetch live news + AI write-up in background
+    (async()=>{
+      try{
+        const [wu, fund] = await Promise.all([
+          aiService.getWriteUp(trade),
+          aiService.getShortNewsBrief(asset, dir),
+        ]);
+        const updates = {};
+        if(wu)   updates.ai_write_up  = wu;
+        if(fund) updates.fundamental  = fund;
+        if(Object.keys(updates).length>0){
+          await dbUpdate(trade.id, updates);
+          const updated = await dbGetById(trade.id);
+          if(updated) broadcast({type:"TRADE_UPDATED", trade:updated});
+          console.log(`Manual trade updated with news: ${trade.id}`);
+        }
+      }catch(err){
+        console.error("Background AI error:", err.message);
+      }
+    })();
     broadcast({type:"NEW_SIGNAL",trade});
     res.json({success:true, message:`✅ ${asset} ${dir} accepted — RR 1:${rr}. AI generating…`, trade});
   } catch(err) {
